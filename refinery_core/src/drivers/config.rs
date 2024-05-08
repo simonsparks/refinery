@@ -80,9 +80,31 @@ macro_rules! with_connection {
             }
             ConfigDbType::Postgres => {
                 cfg_if::cfg_if! {
-                    if #[cfg(feature = "postgres")] {
+                    if #[cfg(all(feature = "postgres", not(feature = "postgres-openssl"), not(feature = "postgres-native-tls")))] {
                         let path = build_db_url("postgresql", &$config);
                         let conn = postgres::Client::connect(path.as_str(), postgres::NoTls).migration_err("could not connect to database", None)?;
+                        $op(conn)
+                    } else if #[cfg(all(feature = "postgres", feature = "postgres-openssl", not(feature = "postgres-native-tls")))] {
+                        let path = build_db_url("postgresql", &$config);
+                        let conn = if $config.use_tls() {
+                            let connector = openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls())
+                                .migration_err("could not establish openssl connection for postgresql", None)?.build();
+                            let connector = postgres_openssl::MakeTlsConnector::new(connector);
+                            postgres::Client::connect(path.as_str(), connector)
+                        } else {
+                            postgres::Client::connect(path.as_str(), postgres::NoTls)
+                        }.migration_err("could not connect to database", None)?;
+                        $op(conn)
+                    } else if #[cfg(all(feature = "postgres", not(feature = "postgres-openssl"), feature = "postgres-native-tls"))] {
+                        let path = build_db_url("postgresql", &$config);
+                        let conn = if $config.use_tls() {
+                            let connector = native_tls::TlsConnector::builder().build()
+                                .migration_err("could not establish native tls connection for postgresql", None)?;
+                            let connector = postgres_native_tls::MakeTlsConnector::new(connector);
+                            postgres::Client::connect(path.as_str(), connector)
+                        } else {
+                            postgres::Client::connect(path.as_str(), postgres::NoTls)
+                        }.migration_err("could not connect to database", None)?;
                         $op(conn)
                     } else {
                         panic!("tried to migrate from config for a postgresql database, but feature postgres not enabled!");

@@ -34,6 +34,7 @@ impl Config {
                 db_user: None,
                 db_pass: None,
                 db_name: None,
+                use_tls: false,
                 #[cfg(feature = "tiberius-config")]
                 trust_cert: false,
             },
@@ -139,6 +140,10 @@ impl Config {
         self.main.db_port.as_deref()
     }
 
+    pub fn use_tls(&self) -> bool {
+        self.main.use_tls
+    }
+
     pub fn set_db_user(self, db_user: &str) -> Config {
         Config {
             main: Main {
@@ -179,6 +184,15 @@ impl Config {
         Config {
             main: Main {
                 db_name: Some(db_name.into()),
+                ..self.main
+            },
+        }
+    }
+
+    pub fn set_use_tls(self, use_tls: bool) -> Config {
+        Config {
+            main: Main {
+                use_tls,
                 ..self.main
             },
         }
@@ -238,6 +252,7 @@ impl TryFrom<Url> for Config {
                 db_user: Some(url.username().to_string()),
                 db_pass: url.password().map(|r| r.to_string()),
                 db_name: Some(url.path().trim_start_matches('/').to_string()),
+                use_tls: false, // TODO: resolve from url
                 #[cfg(feature = "tiberius-config")]
                 trust_cert,
             },
@@ -270,6 +285,7 @@ struct Main {
     db_user: Option<String>,
     db_pass: Option<String>,
     db_name: Option<String>,
+    use_tls: bool,
     #[cfg(feature = "tiberius-config")]
     #[serde(default)]
     trust_cert: bool,
